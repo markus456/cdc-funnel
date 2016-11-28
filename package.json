@@ -1,0 +1,18 @@
+{
+  "name": "cdc-funnel",
+  "version": "1.0.0",
+  "description": "Combine MaxScale CDC streams",
+  "main": "funnel.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "maxscale"
+  ],
+  "author": "Markus Mäkelä",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "express": "^4.14.0",
+    "split2": "^2.1.0"
+  }
+}
