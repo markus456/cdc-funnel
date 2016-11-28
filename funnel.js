@@ -2,20 +2,19 @@ var net = require("net")
 var crypto = require("crypto")
 var split2 = require("split2")
 var express = require("express")
+var config = require("config")
 var app = express()
 
-var my_port = 4001
-var my_host = "127.0.0.1"
-var my_user = "markusjm"
-var my_password = "markusjm"
+var client = config.get("source")
+var server = config.get("listen")
 
 function handleSocket(sock, target, res) {
 
     // Send the authentication
     const hash = crypto.createHash('sha1')
-    hash.update(my_password)
+    hash.update(client.password)
 
-    sock.write(new Buffer(my_user + ":").toString('hex') + hash.digest().toString('hex'));
+    sock.write(new Buffer(client.user + ":").toString('hex') + hash.digest().toString('hex'));
 
     var state = 0
 
@@ -48,7 +47,7 @@ app.get("/", (req, resp) => {
                            })
 
             tables.forEach((d) => {
-                handleSocket(net.createConnection(my_port, my_host), d, resp)
+                handleSocket(net.createConnection(client.port, client.host), d, resp)
             })
         }
 
@@ -57,6 +56,10 @@ app.get("/", (req, resp) => {
     }
 })
 
-app.listen(8080, () => {
-    console.log("Listening on 8080")
+app.listen(server.port, server.host, () => {
+    console.log("Listening on " + server.host + ":" + server.port)
 })
+
+process.on('uncaughtException', (ex) => {
+    console.log(ex);
+});
