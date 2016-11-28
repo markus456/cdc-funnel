@@ -27,10 +27,16 @@ function handleSocket(sock, target, res) {
             // Request the data stream
             sock.write("REQUEST-DATA " + target);
             state++
+        } else if (client.skip_headers && state == 2) {
+            // Skip the Avro Schema row
+            state++
         } else {
             // Send the objects
-            res.write(obj + "\n")
+            var tmp = JSON.parse(obj)
+            tmp.table = target
+            res.write(JSON.stringify(tmp) + "\n")
         }
+
     })
 }
 
