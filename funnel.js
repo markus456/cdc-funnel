@@ -8,7 +8,7 @@ var app = express()
 var client = config.get("source")
 var server = config.get("listen")
 
-function handleSocket(sock, target, res) {
+function handleSocket(sock, target, gtid, res) {
 
     // Send the authentication
     const hash = crypto.createHash('sha1')
@@ -25,7 +25,13 @@ function handleSocket(sock, target, res) {
             state++
         } else if (state == 1) {
             // Request the data stream
-            sock.write("REQUEST-DATA " + target);
+
+            if (gtid.domain > 0 && gtid.server_id > 0 && gtid.sequence > 0) {
+                sock.write("REQUEST-DATA " + target + " " + gtid.domain + "-" + gtid.server_id + "-" + gtid.sequence);
+            } else {
+                sock.write("REQUEST-DATA " + target);
+            }
+
             state++
         } else if (client.skip_headers && state == 2) {
             // Skip the Avro Schema row
@@ -45,6 +51,19 @@ app.get("/", (req, resp) => {
         if(req.query.tables) {
             tables = req.query.tables.split(',')
 
+            gtid = {
+                sequence: 0,
+                server_id: 0,
+                domain: 0
+            }
+
+            if (req.query.gtid) {
+                req_gtid = req.query.gtid.split('-')
+                gtid.domain = req_gtid[0]
+                gtid.server_id = req_gtid[1]
+                gtid.sequence = req_gtid[2]
+            }
+
             resp.writeHead(200,
                            {
                                "Content-Type": "application/json",
@@ -52,8 +71,8 @@ app.get("/", (req, resp) => {
                                'Connection': 'Transfer-Encoding'
                            })
 
-            tables.forEach((d) => {
-                handleSocket(net.createConnection(client.port, client.host), d, resp)
+            tables.forEach((t) => {
+                handleSocket(net.createConnection(client.port, client.host), t, gtid, resp)
             })
         }
 
