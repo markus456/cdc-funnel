@@ -8,72 +8,115 @@ var app = express()
 var client = config.get("source")
 var server = config.get("listen")
 
-function handleSocket(sock, target, gtid, res) {
-
-    // Send the authentication
-    const hash = crypto.createHash('sha1')
-    hash.update(client.password)
-
-    sock.write(new Buffer(client.user + ":").toString('hex') + hash.digest().toString('hex'));
-
-    var state = 0
-
-    sock.pipe(split2()).on('data', (obj) => {
-        if (state == 0) {
-            // Register for JSON events
-            sock.write("REGISTER UUID=asdf, TYPE=JSON");
-            state++
-        } else if (state == 1) {
-            // Request the data stream
-
-            if (gtid.domain > 0 && gtid.server_id > 0 && gtid.sequence > 0) {
-                sock.write("REQUEST-DATA " + target + " " + gtid.domain + "-" + gtid.server_id + "-" + gtid.sequence);
-            } else {
-                sock.write("REQUEST-DATA " + target);
-            }
-
-            state++
-        } else if (client.skip_headers && state == 2) {
-            // Skip the Avro Schema row
-            state++
-        } else {
-            // Send the objects
-            var tmp = JSON.parse(obj)
-            tmp.table = target
-            res.write(JSON.stringify(tmp) + "\n")
-        }
-
+// Register for JSON events
+function cdcRegister(obj) {
+    return new Promise((resolve, reject) => {
+        obj.socket.write("REGISTER UUID=" + client.uuid + ", TYPE=JSON")
+        obj.socket.pipe(split2()).once('data', () => {
+            return resolve(obj)
+        })
     })
 }
 
+// Request the data stream
+//
+// If a GTID is defined in the client request, only events starting from that
+// GTID are requested. If no GTID is defined, all events are requested.
+function cdcRequest(obj) {
+    return new Promise((resolve, reject) => {
+
+        if (obj.gtid.sequence > 0) {
+            obj.socket.write("REQUEST-DATA " + obj.target + " " + obj.gtid.domain + "-" + obj.gtid.server_id + "-" + obj.gtid.sequence);
+        } else {
+            obj.socket.write("REQUEST-DATA " + obj.target);
+        }
+
+        if (client.skip_headers) {
+            obj.socket.pipe(split2()).once('data', () => {
+                resolve(obj)
+            })
+        } else {
+            resolve(obj)
+        }
+    })
+}
+
+// Stream the JSON events to the client
+function cdcStream(obj) {
+    obj.socket.pipe(split2()).on('data', (data) => {
+        var tmp = JSON.parse(data)
+        tmp.table = obj.target
+        obj.output.write(JSON.stringify(tmp) + "\n")
+    })
+}
+
+// Create a new connection and authenticate
+function cdcConnect(target, gtid, res) {
+
+    return new Promise((resolve, reject) => {
+        var sock = net.createConnection(client.port, client.host)
+        sock.on('error', (err) => {
+            reject(err)
+        })
+
+        // Send the authentication string
+        const hash = crypto.createHash('sha1')
+        hash.update(client.password)
+        sock.write(new Buffer(client.user + ":").toString('hex') + hash.digest().toString('hex'));
+
+        sock.pipe(split2()).once('data', (obj) => {
+            resolve({
+                socket: sock,
+                target: target,
+                gtid:   gtid,
+                output: res
+            })
+        })
+    })
+}
+
+// Extract the GTID from the request
+function extractGTID(req) {
+    gtid = {
+        sequence: 0,
+        server_id: 0,
+        domain: 0
+    }
+
+    if (req.query.gtid) {
+        req_gtid = req.query.gtid.split('-')
+        gtid.domain = req_gtid[0]
+        gtid.server_id = req_gtid[1]
+        gtid.sequence = req_gtid[2]
+    }
+
+    return gtid
+}
+
+// Main entry point
+//
+// Expects at least one table in the `tables` query. If none are provided a 200
+// OK response is sent to the client.
 app.get("/", (req, resp) => {
     try {
         if(req.query.tables) {
-            tables = req.query.tables.split(',')
+            resp.set({ "Content-Type": "application/json" })
 
-            gtid = {
-                sequence: 0,
-                server_id: 0,
-                domain: 0
-            }
+            var tables = req.query.tables.split(',')
+            var gtid = extractGTID(req)
 
-            if (req.query.gtid) {
-                req_gtid = req.query.gtid.split('-')
-                gtid.domain = req_gtid[0]
-                gtid.server_id = req_gtid[1]
-                gtid.sequence = req_gtid[2]
-            }
-
-            resp.writeHead(200,
-                           {
-                               "Content-Type": "application/json",
-                               'Transfer-Encoding': 'chunked',
-                               'Connection': 'Transfer-Encoding'
-                           })
-
-            tables.forEach((t) => {
-                handleSocket(net.createConnection(client.port, client.host), t, gtid, resp)
+            tables.forEach((target) => {
+                cdcConnect(target, gtid, resp)
+                    .then(cdcRegister)
+                    .then(cdcRequest)
+                    .then(cdcStream)
+                    .catch((e) => {
+                        resp.status(503).end()
+                    })
             })
+
+        } else {
+            resp.send()
         }
 
     } catch (ex) {
@@ -84,7 +127,3 @@ app.get("/", (req, resp) => {
 app.listen(server.port, server.host, () => {
     console.log("Listening on " + server.host + ":" + server.port)
 })
-
-process.on('uncaughtException', (ex) => {
-    console.log(ex);
-});
