@@ -57,12 +57,27 @@ function cdcRequest(obj) {
     })
 }
 
+// Data formatter for plain newline delimited JSON
+function writeJSON(dest, obj) {
+    dest.write(JSON.stringify(obj) + "\n")
+}
+
+// Data formatter for Server-Sent Events
+function writeSSE(dest, obj) {
+    dest.write("data: " + JSON.stringify(obj) + "\n\n")
+}
+
 // Stream the JSON events to the client
 function cdcStream(obj) {
     obj.socket.pipe(split2()).on('data', (data) => {
         var tmp = JSON.parse(data)
         tmp.table = obj.target
-        obj.output.write(JSON.stringify(tmp) + "\n")
+
+        if (server.format == "sse") {
+            writeSSE(obj.output, tmp)
+        } else {
+            writeJSON(obj.output, tmp)
+        }
     })
 }
 
@@ -116,7 +131,18 @@ function extractGTID(req) {
 app.get("/", (req, resp) => {
     try {
         if(req.query.tables) {
-            resp.set({ "Content-Type": "application/json" })
+
+            if (server.format == "sse") {
+                // Send SSE events
+                contentType = "text/event-stream"
+            } else {
+                // Send plain JSON, client needs to parse it
+                contentType = "application/json"
+            }
+
+            resp.set({ "Access-Control-Allow-Origin": "*",
+                       "Content-Type": contentType })
+
 
             var tables = req.query.tables.split(',')
             var gtid = extractGTID(req)

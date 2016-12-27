@@ -11,3 +11,4 @@ source:
 listen:
     port: 8080     # Port to listen for requests
     host: 0.0.0.0  # Where to bind
+    format: sse    # Stream format, either `sse` (Server-Sent Events) or `json` (newline delimited JSON)
