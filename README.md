@@ -3,7 +3,7 @@
 CDC stream combiner for [MariaDB MaxScale](https://github.com/mariadb-corporation/MaxScale).
 
 The _cdc-funnel_ provides an easy way to combine multiple data streams into one
-coherent newline delimited JSON stream. It is intended to be used with the
+coherent stream. It is intended to be used with the
 MaxScale CDC modules described in more detail [here](https://mariadb.com/kb/en/mariadb-enterprise/5961/).
 
 The configuration file is found in `config/default.yml` and follows the following structure.
@@ -25,11 +25,13 @@ listen:
     format: sse    # Stream format, either `sse` (Server-Sent Events) or `json` (newline delimited JSON)
 ```
 
-The service expects HTTP GET requests and accepts one parameter, `tables`, which
-is comma-separate list of fully qualified table names (`database.table`). The
+The service expects HTTP GET requests and accepts two parameters, `tables`, which
+is comma-separate list of fully qualified table names (`database.table`) and `gtid`
+which is a MariaDB GTID where the stream will start. The
 streams will be combined into one single stream by piping the content of the
-stream to the client. The data will always be a newline delimited JSON stream.
+stream to the client. The data is delivered either as a newline delimited JSON stream or a SSE stream.
 
+Here is example output of the newline delimited JSON mode:
 ```
 [markusjm@localhost ~]$ curl localhost:8080/?tables=test.t1,test.t2
 {"domain":0,"server_id":3000,"sequence":7429,"event_number":1,"timestamp":1480373261,"event_type":"insert","id":2,"data":"World","table":"test.t1"}
