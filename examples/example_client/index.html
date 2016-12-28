@@ -1,0 +1,24 @@
+<html>
+  <head>
+    <title>CDC Funnel Example</title>
+    <style>
+      canvas {
+      border-style: solid;
+      border-width: 1px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div>
+      <button onclick = "startStream();">Start</button>
+      <button onclick = "stopStream();">Stop</button>
+      <button onclick = "pauseStream();">Pause/Unpause</button>
+      <button onclick = "faster();">Faster</button>
+      <button onclick = "slower();">Slower</button>
+    </div>
+
+    <canvas id = "my-canvas" width = "800" height = "600"></canvas>
+    <script src = "render.js"></script>
+  </body>
+</html>

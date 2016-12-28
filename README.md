@@ -16,11 +16,13 @@ source:
     host: 127.0.0.1     # MaxScale host
     port: 4001          # MaxScale port
     skip_headers: true  # Don't send Avro schema headers to the stream
+    uuid: my_uuid       # A unique client identifier
 
 # Service configuration
 listen:
     port: 8080     # Port to listen for requests
     host: 0.0.0.0  # Where to bind
+    format: sse    # Stream format, either `sse` (Server-Sent Events) or `json` (newline delimited JSON)
 ```
 
 The service expects HTTP GET requests and accepts one parameter, `tables`, which
