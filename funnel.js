@@ -28,8 +28,11 @@ var server = config.get("listen")
 function cdcRegister(obj) {
     return new Promise((resolve, reject) => {
         obj.socket.write("REGISTER UUID=" + client.uuid + ", TYPE=JSON")
-        obj.socket.pipe(split2()).once('data', () => {
-            return resolve(obj)
+        obj.socket.pipe(split2()).once('data', (d) => {
+            if (d == "OK")
+                return resolve(obj)
+            else
+                return reject(obj)
         })
     })
 }
@@ -96,12 +99,16 @@ function cdcConnect(target, gtid, res) {
         sock.write(new Buffer(client.user + ":").toString('hex') + hash.digest().toString('hex'));
 
         sock.pipe(split2()).once('data', (obj) => {
-            resolve({
-                socket: sock,
-                target: target,
-                gtid:   gtid,
-                output: res
-            })
+            if (obj == "OK") {
+                resolve({
+                    socket: sock,
+                    target: target,
+                    gtid:   gtid,
+                    output: res
+                })
+            } else {
+                reject()
+            }
         })
     })
 }
@@ -153,7 +160,7 @@ app.get("/", (req, resp) => {
                     .then(cdcRequest)
                     .then(cdcStream)
                     .catch((e) => {
-                        resp.status(503).end()
+                        resp.status(400).end()
                     })
             })
 
